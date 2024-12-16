@@ -1,0 +1,72 @@
+import cv2
+import numpy as np
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+
+# Functies voor Gaussian en Lorentz fitting
+def gaussian(x, a, x0, sigma):
+    return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+
+def lorentzian(x, a, x0, gamma):
+    return a * gamma**2 / ((x - x0)**2 + gamma**2)
+
+# USB-camera openen
+cap = cv2.VideoCapture(0)  # 0 staat voor de eerste aangesloten camera
+
+if not cap.isOpened():
+    print("Kan camera niet openen")
+    exit()
+
+# Lees een enkele foto
+ret, frame = cap.read()
+if not ret:
+    print("Kan geen frame lezen, controleer de camera")
+    cap.release()
+    exit()
+
+# Zet frame om naar grijswaarden
+gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+# Camera sluiten
+cap.release()
+
+# Intensiteitsprofiel ophalen (bijvoorbeeld een horizontale lijn in het midden)
+height, width = gray_frame.shape
+y_mid = height // 2
+intensity_profile = gray_frame[y_mid, :]  # Intensiteiten langs de lijn
+
+# Data voorbereiden
+x_data = np.arange(len(intensity_profile))
+y_data = intensity_profile
+
+# Curve fitting uitvoeren
+try:
+    # Gaussian fit
+    popt_gauss, _ = curve_fit(gaussian, x_data, y_data, p0=[max(y_data), width//2, 10])
+    gauss_fit = gaussian(x_data, *popt_gauss)
+
+    # Lorentz fit
+    popt_lorentz, _ = curve_fit(lorentzian, x_data, y_data, p0=[max(y_data), width//2, 10])
+    lorentz_fit = lorentzian(x_data, *popt_lorentz)
+
+    # Resultaten plotten
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_data, y_data, label="Originele data", color="blue")
+    plt.plot(x_data, gauss_fit, label="Gaussian fit", color="red")
+    plt.plot(x_data, lorentz_fit, label="Lorentz fit", color="green")
+    plt.xlabel("Pixel positie")
+    plt.ylabel("Intensiteit")
+    plt.legend()
+    plt.title("Intensiteit langs de lijn en fits")
+    plt.show()
+
+except Exception as e:
+    print(f"Fitting mislukt: {e}")
+
+# Optioneel: de originele foto opslaan
+cv2.imwrite("foto.png", frame)
+
+# Optioneel: de grijswaardenfoto tonen
+cv2.imshow("Grijswaarden foto", gray_frame)
+cv2.waitKey(0)  # Wacht tot een toets wordt ingedrukt
+cv2.destroyAllWindows()
